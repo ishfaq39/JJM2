@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>JJM Training Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+body{font-family:Arial;background:#eef5fb;margin:0}
+header{background:#0b3d75;color:#fff;padding:20px;text-align:center}
+.container{padding:20px}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px}
+.card{background:#fff;padding:15px;border-radius:10px;box-shadow:0 4px 10px rgba(0,0,0,.1)}
+</style>
+</head>
+<body>
+
+<header><h1>JJM Training Dashboard (Full Version)</h1></header>
+
+<div class="container">
+
+<div class="grid">
+<div class="card"><b>Total Courses</b><div id="total">0</div></div>
+<div class="card"><b>Fetched Courses</b><div id="fetched">0</div></div>
+<div class="card"><b>Registrations</b><div id="regs">0</div></div>
+<div class="card"><b>Pending</b><div id="pending">0</div></div>
+</div>
+
+<div class="card">
+<h3>Registrations by Type</h3>
+<canvas id="chart"></canvas>
+</div>
+
+</div>
+
+<script>
+
+// ==== PASTE YOUR COURSE LIST HERE ====
+const COURSES = [
+ // example structure
+ // {code:"JJM-H-01",type:"Hybrid",course:"Pump Audit",link:"https://docs.google.com/..."}
+];
+
+// ==== UTIL ====
+function getSheetId(url){
+ let m = url.match(/\/d\/(.*?)\//);
+ return m ? m[1] : "";
+}
+
+// ==== FETCH ====
+async function fetchSheet(course){
+ if(!course.link){course.reg=0;course.status="No link";return;}
+ let id = getSheetId(course.link);
+ if(!id){course.reg=0;course.status="Bad link";return;}
+
+ try{
+   let res = await fetch(`https://docs.google.com/spreadsheets/d/${id}/gviz/tq?tqx=out:csv`);
+   let text = await res.text();
+
+   if(text.includes("<html")){
+     course.reg=0;course.status="Not public";return;
+   }
+
+   let rows = text.split("\n").slice(1);
+   let count = rows.filter(r=>{
+     let cols = r.split(",");
+     return cols[1] && cols[1].length>2;
+   }).length;
+
+   course.reg = count;
+   course.status = count>0 ? "Loaded":"No registrations";
+
+ }catch(e){
+   course.reg=0;
+   course.status="Fetch error";
+ }
+}
+
+// ==== MAIN ====
+async function load(){
+
+ document.getElementById("total").innerText = COURSES.length;
+
+ let pending = COURSES.length;
+ document.getElementById("pending").innerText = pending;
+
+ for(let c of COURSES){
+   await fetchSheet(c);
+   pending--;
+   document.getElementById("pending").innerText = pending;
+ }
+
+ let fetched = COURSES.filter(c=>c.status==="Loaded"||c.status==="No registrations").length;
+ let regs = COURSES.reduce((a,c)=>a+(c.reg||0),0);
+
+ document.getElementById("fetched").innerText = fetched;
+ document.getElementById("regs").innerText = regs;
+
+ // chart
+ let types = ["Online","Hybrid","Physical","Webinar"];
+ let data = types.map(t=>COURSES.filter(c=>c.type===t).reduce((a,c)=>a+(c.reg||0),0));
+
+ new Chart(document.getElementById("chart"),{
+   type:"doughnut",
+   data:{
+     labels:types,
+     datasets:[{data:data}]
+   }
+ });
+}
+
+load();
+
+</script>
+
+</body>
+</html>
